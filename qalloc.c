@@ -38,6 +38,9 @@
 #if defined(_Q_DEBUG_) || defined(_Q_STRFUNCS_)
 #include <stdio.h>
 #endif
+#ifdef _Q_AVR_
+#include <avr/io.h>
+#endif
 
 #ifdef Q_STR_127
     typedef uint8_t         q_ptr;
@@ -52,11 +55,11 @@
     typedef uint64_t        q_ptr;
     typedef uint64_t        q_ptr_far;
 #elifdef Q_STR_NATIVE
-    typedef uint64_t        q_ptr;
-    typedef uint64_t        q_ptr_far;
+    typedef size_t          q_ptr;
+    typedef size_t          q_ptr_far;
 #endif // Q_STR_32k
 
-#define Q_FREEMASK  ((uint64_t)0x80 << ((sizeof(q_ptr)-1ULL)*8ULL))
+#define Q_FREEMASK  ((size_t)0x80 << ((sizeof(q_ptr)-1ULL)*8ULL))
 #define Q_MAXLEN    (Q_FREEMASK - 1ULL)
 
 #define Q_REALLOC_TRIVIAL
@@ -113,13 +116,17 @@ size_t __q_formatmem(size_t start, size_t end){
     return ptr.addr;
 }
 
+
 bool q_initmem(size_t start, size_t end){
     __q_heap_start.addr = start;
     __q_heap_end.addr = end;
     #ifdef _Q_DEBUG_
-    printf("\nRange:    %05lx ... %05lx", reladr(start), reladr(end));
-    printf("\nFreemask: %016lx", (size_t)Q_FREEMASK);
-    printf("\nMaxlen:   %016lx", (size_t)Q_MAXLEN);
+    printf("\nRange:    %05x ... %05x", reladr(start), reladr(end));
+    printf("\nFreemask: %016x", (size_t)Q_FREEMASK);
+    printf("\nMaxlen:   %016x", (size_t)Q_MAXLEN);
+    #ifdef _Q_AVR_
+    printf("\nSP:       %016x", (size_t)SP);
+    #endif
     #endif
     if(start >= end - sizeof(q_ptr)){
         return false;
@@ -127,7 +134,7 @@ bool q_initmem(size_t start, size_t end){
 
 
     #ifdef _Q_AVR_
-    if(end + __Q_MALLOC_MARGIN > STACK_POINTER()){
+    if(end + __Q_MALLOC_MARGIN > (size_t)SP){
         return false;
     }
     #endif // _Q_AVR_
@@ -288,7 +295,7 @@ void *q_malloc(size_t len) {
     }
 
     #ifdef _Q_AVR_
-    if(__q_heap_end + __Q_MALLOC_MARGIN > STACK_POINTER()){
+    if(__q_heap_end.addr + __Q_MALLOC_MARGIN > (size_t)SP){
         return 0;
     }
     #endif // _Q_AVR_
@@ -667,7 +674,7 @@ size_t reladr(size_t addr){
 
 void ptrcheck(size_t ptr, long unsigned int dbg){
     if((ptr > __q_heap_end.addr) || (ptr < __q_heap_start.addr)){
-        printf("\nPointer err in %lu. Pointer is: %lu  Heap is %lu ... %lu\n", dbg, reladr(ptr), reladr(__q_heap_start.addr), reladr(__q_heap_end.addr));
+        printf("\nPointer err in %lu. Pointer is: %u  Heap is %u ... %u\n", dbg, reladr(ptr), reladr(__q_heap_start.addr), reladr(__q_heap_end.addr));
         q_listalloc();
         exit(0);
     }
@@ -682,7 +689,7 @@ void q_listalloc(void) {
     while(ptr.addr < __q_heap_end.addr){
         q_ptr l = *ptr.len;
         if(l & Q_FREEMASK){
-            printf("\n*BLOCK FREE at %05lx of len %lu", reladr(ptr.addr), l & ~Q_FREEMASK);
+            printf("\n*BLOCK FREE at %05x of len %u", reladr(ptr.addr),  (l & ~Q_FREEMASK));
             total += (l & ~Q_FREEMASK)+ sizeof(q_ptr);
         }else{
             #define Q_LOCAL_BUFSIZE 256
@@ -695,7 +702,7 @@ void q_listalloc(void) {
             }
             memmove(buf, (q_ptr*)(ptr.addr + sizeof(q_ptr)), ln);
             buf[ln] = 0;
-            printf("\n Used block at %05lx of len %lu: '%s'", reladr(ptr.addr), (size_t)l, buf);
+            printf("\n Used block at %05x of len %u: '%s'", reladr(ptr.addr), (size_t)l, buf);
             if(!l){
               memmove(buf, (q_ptr*)(ptr.addr - sizeof(q_ptr)), 20);
               printf(" <--- *** NULL BLOCK ***");
@@ -718,13 +725,13 @@ void q_listalloc(void) {
         ptr.addr = ptr.addr + (l & ~Q_FREEMASK) + sizeof(q_ptr);
 
     }
-    printf("\nTotal: %lu  Free: %lu Last ptr: %05lx-->%05lx", total,q_get_freemem(), reladr(last.addr), reladr(lastl));
+    printf("\nTotal: %u  Free: %u Last ptr: %05x-->%05x", total,q_get_freemem(), reladr(last.addr), reladr(lastl));
 }
 
 size_t q_countalloc(void) {
     Uq_ptr ptr = __q_heap_start;
     size_t total = 0;
-    size_t ret = 1000000000;
+    size_t ret = 0xffff;
     while(ptr.addr < __q_heap_end.addr){
         q_ptr l = *ptr.len;
         if(l & Q_FREEMASK){

@@ -70,7 +70,7 @@
 #define Q_STR_NATIVE    //size_t pointers, max string length size_t/2-1   (overhead: sizeof(size_t) bytes per chunk)
 
 
-//#define _Q_DEBUG_               // Enable misc debug functions and exposes __q_collect()
+#define _Q_DEBUG_               // Enable misc debug functions and exposes __q_collect()
 #define _Q_EXTRA_               // Enable q_get_freemem()
 #define _Q_STRFUNCS_            // Enable q_storestr() and q_getstr()
 
@@ -78,8 +78,6 @@
 
 
 #ifdef _Q_AVR_
-extern volatile uint8_t __SP_L__, __SP_H__;
-#define STACK_POINTER() ((char*)((uint16_t)__SP_H__ << 8 | (uint16_t)__SP_L__))
 #define __Q_MALLOC_MARGIN   32
 #endif
 
